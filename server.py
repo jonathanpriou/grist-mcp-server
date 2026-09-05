@@ -68,6 +68,9 @@ async def fetch_grist_records(
 
 
 if __name__ == "__main__":
-    import os
+import os
+import uvicorn
+
 port = int(os.environ.get("PORT", 8080))
-mcp.run(transport="streamable-http", port=port)
+app = mcp.get_asgi_app()
+uvicorn.run(app, host="0.0.0.0", port=port)
