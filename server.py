@@ -131,21 +131,24 @@ async def update_huwise_dataset(
         ))
     csv_content = "\n".join(csv_lines)
 
-    filename = f"{huwise_dataset_uid}-full.csv"
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/resources/",
-            headers={"Authorization": f"Apikey {huwise_token}"},
-            files={"file": (filename, csv_content.encode("utf-8"), "text/csv")}
-        )
-        response.raise_for_status()
+ filename = f"{huwise_dataset_uid}-full.csv"
+async with httpx.AsyncClient(timeout=60) as client:
+    response = await client.post(
+        f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/files/",
+        headers={"Authorization": f"Apikey {huwise_token}"},
+        files={"file": (filename, csv_content.encode("utf-8"), "text/csv")}
+    )
+    response.raise_for_status()
+    file_data = response.json()
+    file_uid = file_data.get("uid") or file_data.get("file_uid")
 
-    return {
-        "success": True,
-        "total_records": len(all_records),
-        "columns": columns,
-        "filename": filename
-    }
+return {
+    "success": True,
+    "total_records": len(all_records),
+    "columns": columns,
+    "filename": filename,
+    "file_uid": file_uid
+}
 
 
 if __name__ == "__main__":
