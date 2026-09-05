@@ -1,9 +1,9 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 
-mcp = FastMCP("grist-fetcher")
+mcp = FastMCP("Grist Fetcher")
 
-@mcp.tool()
+@mcp.tool
 async def fetch_grist_records(
     url: str,
     bearer_token: str,
@@ -16,9 +16,6 @@ async def fetch_grist_records(
         url: URL complète de la table Grist (sans ?limit)
         bearer_token: Token Bearer pour l'authentification
         limit: Nombre de records à récupérer (défaut: 5)
-    
-    Returns:
-        Dict avec les records aplatis et le schéma CSV
     """
     full_url = f"{url}?limit={limit}"
     
@@ -34,14 +31,12 @@ async def fetch_grist_records(
     if not records:
         return {"records": [], "csv": "", "columns": []}
     
-    # Aplatissement de la structure Grist {id, fields: {...}}
     flat_records = []
     for record in records:
         row = {"id": record.get("id")}
         fields = record.get("fields", {})
         for key, value in fields.items():
             clean_key = key.replace(" ", "_").replace("-", "_")
-            # Grist lists: ["L", "val1", "val2"] → "val1|val2"
             if isinstance(value, list) and len(value) > 0 and value[0] == "L":
                 row[clean_key] = "|".join(str(v) for v in value[1:])
             elif value is None:
@@ -50,7 +45,6 @@ async def fetch_grist_records(
                 row[clean_key] = value
         flat_records.append(row)
     
-    # Génération CSV
     columns = list(flat_records[0].keys()) if flat_records else []
     csv_lines = [",".join(columns)]
     for row in flat_records:
@@ -66,11 +60,5 @@ async def fetch_grist_records(
         "total_fetched": len(flat_records)
     }
 
-
 if __name__ == "__main__":
-import os
-import uvicorn
-
-port = int(os.environ.get("PORT", 8080))
-app = mcp.get_asgi_app()
-uvicorn.run(app, host="0.0.0.0", port=port)
+    mcp.run()
