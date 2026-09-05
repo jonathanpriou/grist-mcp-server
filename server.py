@@ -13,7 +13,7 @@ async def fetch_grist_records(
     Appelle une API Grist et retourne les records aplatis.
 
     Args:
-        url: URL complète de la table Grist (sans ?limit)
+        url: URL complete de la table Grist (sans ?limit)
         bearer_token: Token Bearer pour l authentification
         limit: Nombre de records a recuperer (defaut 5)
     """
@@ -71,15 +71,15 @@ async def update_huwise_dataset(
     max_records: int = 100
 ) -> dict:
     """
-    Récupère les records Grist via pagination et met à jour le dataset Huwise.
+    Recupere les records Grist via pagination et met a jour le dataset Huwise.
 
     Args:
-        grist_url: URL complète de la table Grist (sans ?limit ni ?offset)
+        grist_url: URL complete de la table Grist (sans ?limit ni ?offset)
         grist_token: Bearer token Grist
         huwise_dataset_uid: UID du dataset Huwise (ex: da_xxxxx)
         huwise_token: Token d authentification Huwise
         huwise_domain: Domaine du portail Huwise
-        max_records: Nombre maximum de records à charger (defaut 100)
+        max_records: Nombre maximum de records a charger (defaut 100)
     """
     all_records = []
     offset = 0
@@ -120,7 +120,7 @@ async def update_huwise_dataset(
             offset += page_limit
 
     if not all_records:
-        return {"success": False, "error": "Aucun record récupéré depuis Grist"}
+        return {"success": False, "error": "Aucun record recupere depuis Grist"}
 
     columns = list(all_records[0].keys())
     csv_lines = [",".join(columns)]
@@ -131,24 +131,24 @@ async def update_huwise_dataset(
         ))
     csv_content = "\n".join(csv_lines)
 
- filename = f"{huwise_dataset_uid}-full.csv"
-async with httpx.AsyncClient(timeout=60) as client:
-    response = await client.post(
-        f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/files/",
-        headers={"Authorization": f"Apikey {huwise_token}"},
-        files={"file": (filename, csv_content.encode("utf-8"), "text/csv")}
-    )
-    response.raise_for_status()
-    file_data = response.json()
-    file_uid = file_data.get("uid") or file_data.get("file_uid")
+    filename = f"{huwise_dataset_uid}-full.csv"
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/files/",
+            headers={"Authorization": f"Apikey {huwise_token}"},
+            files={"file": (filename, csv_content.encode("utf-8"), "text/csv")}
+        )
+        response.raise_for_status()
+        file_data = response.json()
+        file_uid = file_data.get("uid") or file_data.get("file_uid")
 
-return {
-    "success": True,
-    "total_records": len(all_records),
-    "columns": columns,
-    "filename": filename,
-    "file_uid": file_uid
-}
+    return {
+        "success": True,
+        "total_records": len(all_records),
+        "columns": columns,
+        "filename": filename,
+        "file_uid": file_uid
+    }
 
 
 if __name__ == "__main__":
