@@ -62,4 +62,6 @@ async def fetch_grist_records(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http")
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    mcp.run(transport="http", port=port)
