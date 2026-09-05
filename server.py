@@ -143,12 +143,11 @@ async def update_huwise_dataset(
         file_uid = file_data.get("uid") or file_data.get("file_uid")
 
     return {
-        "success": True,
-        "total_records": len(all_records),
-        "columns": columns,
-        "filename": filename,
-        "file_uid": file_uid
-    }
+    "success": True,
+    "total_records": len(all_records),
+    "columns_count": len(columns),
+    "filename": filename
+}
 
 
 if __name__ == "__main__":
