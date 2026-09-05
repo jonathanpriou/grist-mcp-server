@@ -132,22 +132,39 @@ async def update_huwise_dataset(
     csv_content = "\n".join(csv_lines)
 
     filename = f"{huwise_dataset_uid}-full.csv"
+
     async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
+        # Étape 1 : Upload du fichier CSV
+        upload_response = await client.post(
             f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/files/",
             headers={"Authorization": f"Apikey {huwise_token}"},
             files={"file": (filename, csv_content.encode("utf-8"), "text/csv")}
         )
-        response.raise_for_status()
-        file_data = response.json()
+        upload_response.raise_for_status()
+        file_data = upload_response.json()
         file_uid = file_data.get("uid") or file_data.get("file_uid")
 
+        # Étape 2 : Associer le fichier comme ressource du dataset
+        resource_response = await client.post(
+            f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/resources/",
+            headers={"Authorization": f"Apikey {huwise_token}"},
+            json={
+                "type": "uploaded_file",
+                "title": filename,
+                "datasource": {
+                    "type": "uploaded_file",
+                    "file": {"uid": file_uid}
+                }
+            }
+        )
+        resource_response.raise_for_status()
+
     return {
-    "success": True,
-    "total_records": len(all_records),
-    "columns_count": len(columns),
-    "filename": filename
-}
+        "success": True,
+        "total_records": len(all_records),
+        "columns_count": len(columns),
+        "filename": filename
+    }
 
 
 if __name__ == "__main__":
