@@ -11,14 +11,14 @@ async def fetch_grist_records(
 ) -> dict:
     """
     Appelle une API Grist et retourne les records aplatis.
-    
+
     Args:
-        url: URL complète de la table Grist (sans ?limit)
-        bearer_token: Token Bearer pour l'authentification
-        limit: Nombre de records à récupérer (défaut: 5)
+        url: URL complete de la table Grist (sans ?limit)
+        bearer_token: Token Bearer pour l authentification
+        limit: Nombre de records a recuperer (defaut 5)
     """
     full_url = f"{url}?limit={limit}"
-    
+
     async with httpx.AsyncClient() as client:
         response = await client.get(
             full_url,
@@ -26,11 +26,11 @@ async def fetch_grist_records(
         )
         response.raise_for_status()
         data = response.json()
-    
+
     records = data.get("records", [])
     if not records:
         return {"records": [], "csv": "", "columns": []}
-    
+
     flat_records = []
     for record in records:
         row = {"id": record.get("id")}
@@ -44,7 +44,7 @@ async def fetch_grist_records(
             else:
                 row[clean_key] = value
         flat_records.append(row)
-    
+
     columns = list(flat_records[0].keys()) if flat_records else []
     csv_lines = [",".join(columns)]
     for row in flat_records:
@@ -52,13 +52,14 @@ async def fetch_grist_records(
             f'"{str(row.get(col, "")).replace(chr(34), chr(39))}"'
             for col in columns
         ))
-    
+
     return {
         "records": flat_records,
         "csv": "\n".join(csv_lines),
         "columns": columns,
         "total_fetched": len(flat_records)
     }
+
 
 if __name__ == "__main__":
     mcp.run()
