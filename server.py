@@ -264,15 +264,39 @@ async def extract_document(
         }
 
     # PDF → base64 pour Claude Vision
+        # PDF → extraction texte native, fallback base64 pour Claude Vision
     elif "pdf" in filename or "pdf" in content_type:
-        b64 = base64.standard_b64encode(content).decode("utf-8")
         size_kb = len(content) // 1024
+        try:
+            with pdfplumber.open(BytesIO(content)) as pdf:
+                pages_text = []
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text and text.strip():
+                        pages_text.append(text)
+                
+                if pages_text:
+                    full_text = "\n\n".join(pages_text)
+                    return {
+                        "type": "pdf",
+                        "text": full_text,
+                        "pages": len(pdf.pages),
+                        "size_kb": size_kb,
+                        "extraction_method": "text",
+                        "message": f"PDF extrait nativement ({len(pdf.pages)} pages, {len(full_text)} caractères)"
+                    }
+        except Exception:
+            pass
+
+        # Fallback : base64 pour Claude Vision (PDF scanné ou illisible)
+        b64 = base64.standard_b64encode(content).decode("utf-8")
         return {
             "type": "pdf",
             "base64": b64,
             "media_type": "application/pdf",
             "size_kb": size_kb,
-            "message": f"PDF prêt pour Claude Vision ({size_kb} KB)"
+            "extraction_method": "vision",
+            "message": f"PDF scanné — envoyé à Claude Vision ({size_kb} KB)"
         }
 
     # Images → base64 pour Claude Vision
