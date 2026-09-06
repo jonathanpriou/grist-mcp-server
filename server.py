@@ -1,7 +1,11 @@
 from fastmcp import FastMCP
 import httpx
+import base64
+from io import BytesIO
+from docx import Document
 
 mcp = FastMCP("Grist Fetcher")
+
 
 @mcp.tool
 async def fetch_grist_records(
@@ -130,11 +134,9 @@ async def update_huwise_dataset(
             for col in columns
         ))
     csv_content = "\n".join(csv_lines)
-
     filename = f"{huwise_dataset_uid}-full.csv"
 
     async with httpx.AsyncClient(timeout=60) as client:
-        # Étape 1 : Upload du fichier CSV
         upload_response = await client.post(
             f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/files/",
             headers={"Authorization": f"Apikey {huwise_token}"},
@@ -144,7 +146,6 @@ async def update_huwise_dataset(
         file_data = upload_response.json()
         file_uid = file_data.get("uid") or file_data.get("file_uid")
 
-        # Étape 2 : Associer le fichier comme ressource du dataset
         resource_response = await client.post(
             f"{huwise_domain}/api/management/v2/datasets/{huwise_dataset_uid}/resources/",
             headers={"Authorization": f"Apikey {huwise_token}"},
@@ -165,6 +166,96 @@ async def update_huwise_dataset(
         "columns_count": len(columns),
         "filename": filename
     }
+
+
+@mcp.tool
+async def extract_document(
+    url: str,
+    api_key: str = ""
+) -> dict:
+    """
+    Extrait le contenu d un document depuis une URL Huwise.
+    Supporte PDF (→ base64 pour Claude Vision), DOCX (→ texte natif),
+    et images PNG/JPEG/WEBP (→ base64 pour Claude Vision).
+
+    Args:
+        url: URL de l asset Huwise
+        api_key: Cle API Huwise si document protege (optionnel)
+    """
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Apikey {api_key}"
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.get(url, headers=headers, follow_redirects=True)
+        response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "").lower()
+    content = response.content
+    filename = url.split("/")[-1].lower().split("?")[0]
+
+    # DOCX → texte brut natif (pas d image, zéro token vision)
+    if "docx" in filename or "wordprocessingml" in content_type:
+        doc = Document(BytesIO(content))
+
+        # Paragraphes
+        text = "\n".join([
+            para.text for para in doc.paragraphs
+            if para.text.strip()
+        ])
+
+        # Tableaux → CSV embarqué
+        tables_csv = []
+        for i, table in enumerate(doc.tables):
+            rows = []
+            for row in table.rows:
+                rows.append([cell.text.strip() for cell in row.cells])
+            if rows:
+                header = ",".join(f'"{c}"' for c in rows[0])
+                lines = [header]
+                for row in rows[1:]:
+                    lines.append(",".join(f'"{c}"' for c in row))
+                tables_csv.append(f"# Tableau {i+1}\n" + "\n".join(lines))
+
+        return {
+            "type": "docx",
+            "text": text,
+            "tables_csv": "\n\n".join(tables_csv),
+            "tables_count": len(doc.tables),
+            "message": f"Texte extrait nativement ({len(text)} caractères, {len(doc.tables)} tableau(x))"
+        }
+
+    # PDF → base64 pour Claude Vision
+    elif "pdf" in filename or "pdf" in content_type:
+        b64 = base64.standard_b64encode(content).decode("utf-8")
+        size_kb = len(content) // 1024
+        return {
+            "type": "pdf",
+            "base64": b64,
+            "media_type": "application/pdf",
+            "size_kb": size_kb,
+            "message": f"PDF prêt pour Claude Vision ({size_kb} KB)"
+        }
+
+    # Images → base64 pour Claude Vision
+    elif any(ext in filename for ext in ["png", "jpg", "jpeg", "webp", "gif"]):
+        media_type = content_type if content_type else "image/jpeg"
+        b64 = base64.standard_b64encode(content).decode("utf-8")
+        size_kb = len(content) // 1024
+        return {
+            "type": "image",
+            "base64": b64,
+            "media_type": media_type,
+            "size_kb": size_kb,
+            "message": f"Image prête pour Claude Vision ({size_kb} KB)"
+        }
+
+    else:
+        return {
+            "type": "unknown",
+            "error": f"Format non supporté : {content_type} / {filename}",
+            "message": "Formats supportés : PDF, DOCX, PNG, JPEG, WEBP"
+        }
 
 
 if __name__ == "__main__":
