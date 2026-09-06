@@ -4,6 +4,7 @@ import base64
 from io import BytesIO
 from docx import Document
 import openpyxl
+import pdfplumber
 
 mcp = FastMCP("Grist Fetcher")
 
