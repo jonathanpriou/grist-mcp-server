@@ -2,3 +2,4 @@ fastmcp
 httpx
 python-docx
 openpyxl
+pdfplumber
