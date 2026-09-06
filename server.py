@@ -187,7 +187,10 @@ async def extract_document(
     headers = {}
     if api_key:
         headers["Authorization"] = f"Apikey {api_key}"
-
+        
+    # Simuler un navigateur pour éviter les blocages 403
+    headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.get(url, headers=headers, follow_redirects=True)
         response.raise_for_status()
