@@ -3,6 +3,7 @@ import httpx
 import base64
 from io import BytesIO
 from docx import Document
+import openpyxl
 
 mcp = FastMCP("Grist Fetcher")
 
@@ -175,8 +176,8 @@ async def extract_document(
 ) -> dict:
     """
     Extrait le contenu d un document depuis une URL Huwise.
-    Supporte PDF (→ base64 pour Claude Vision), DOCX (→ texte natif),
-    et images PNG/JPEG/WEBP (→ base64 pour Claude Vision).
+    Supporte PDF (base64 pour Claude Vision), DOCX (texte natif),
+    XLSX (CSV natif), et images PNG/JPEG/WEBP (base64 pour Claude Vision).
 
     Args:
         url: URL de l asset Huwise
@@ -194,17 +195,15 @@ async def extract_document(
     content = response.content
     filename = url.split("/")[-1].lower().split("?")[0]
 
-    # DOCX → texte brut natif (pas d image, zéro token vision)
+    # DOCX → texte brut natif
     if "docx" in filename or "wordprocessingml" in content_type:
         doc = Document(BytesIO(content))
 
-        # Paragraphes
         text = "\n".join([
             para.text for para in doc.paragraphs
             if para.text.strip()
         ])
 
-        # Tableaux → CSV embarqué
         tables_csv = []
         for i, table in enumerate(doc.tables):
             rows = []
@@ -223,6 +222,45 @@ async def extract_document(
             "tables_csv": "\n\n".join(tables_csv),
             "tables_count": len(doc.tables),
             "message": f"Texte extrait nativement ({len(text)} caractères, {len(doc.tables)} tableau(x))"
+        }
+
+    # XLSX → CSV natif (toutes les feuilles)
+    elif "xlsx" in filename or "spreadsheetml" in content_type:
+        wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
+        sheets = {}
+
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                # Ignore les lignes entièrement vides
+                if any(cell is not None for cell in row):
+                    rows.append([
+                        str(cell) if cell is not None else ""
+                        for cell in row
+                    ])
+
+            if rows:
+                csv_lines = []
+                for row in rows:
+                    csv_lines.append(",".join(
+                        f'"{str(cell).replace(chr(34), chr(39))}"'
+                        for cell in row
+                    ))
+                sheets[sheet_name] = "\n".join(csv_lines)
+
+        total_sheets = len(sheets)
+        total_rows = sum(
+            len(csv.split("\n")) - 1
+            for csv in sheets.values()
+        )
+
+        return {
+            "type": "xlsx",
+            "sheets": sheets,
+            "sheets_count": total_sheets,
+            "total_rows": total_rows,
+            "message": f"XLSX extrait nativement ({total_sheets} feuille(s), ~{total_rows} lignes de données)"
         }
 
     # PDF → base64 pour Claude Vision
@@ -254,7 +292,7 @@ async def extract_document(
         return {
             "type": "unknown",
             "error": f"Format non supporté : {content_type} / {filename}",
-            "message": "Formats supportés : PDF, DOCX, PNG, JPEG, WEBP"
+            "message": "Formats supportés : PDF, DOCX, XLSX, PNG, JPEG, WEBP"
         }
 
 
